@@ -205,11 +205,11 @@ def add_object_button(self, context):
 
 def register():
     bpy.utils.register_class(CurvatureOperator)
-    #bpy.types.VIEW3D_MT_object.append(add_object_button) 
+    bpy.types.VIEW3D_MT_object.append(add_object_button) 
 
 def unregister():
     bpy.utils.unregister_class(CurvatureOperator)
-    #bpy.types.VIEW3D_MT_object.remove(add_object_button)
+    bpy.types.VIEW3D_MT_object.remove(add_object_button)
 
 
 if __name__ == "__main__":
