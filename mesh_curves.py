@@ -28,6 +28,14 @@ bl_info = {
     "blender": (2, 74, 0)
 }
 
+"""
+UI: 
+    Selection: Combined, Convexity, Concavity
+    Color coding: Gray scale, red/green
+    Separate [x]
+    Invert [x]
+"""
+
 import bpy
 import bmesh
 import random
@@ -40,15 +48,29 @@ class CurvatureOperator(bpy.types.Operator):
     bl_idname = "object.vertex_colors_curve"
     bl_label = "Curvature to vertex colors"
     bl_options = {'REGISTER', 'UNDO'}
+
+    typesel = bpy.props.EnumProperty(
+        items=[
+            ("RED", "Red/Green", "", 1),
+            ("GREY", "Grayscale", "", 2),
+            ("GREYC", "Grayscale combined", "", 3),
+            ],
+        name="Output style",
+        default="GREYC")
+    
+    curvesel = bpy.props.EnumProperty(
+        items=[
+            ("CAVITY", "Concave", "", 1),
+            ("VEXITY", "Convex", "", 2),
+            ("BOTH", "Both", "", 3),
+            ],
+        name="Curvature type",
+        default="BOTH")
     
     intensity_multiplier = bpy.props.FloatProperty(
         name="Intensity Multiplier",
         default=6.0)
         
-    separate = bpy.props.BoolProperty(
-        name="Separate concavity and convexity",
-        default=False)
-
     concavity = bpy.props.BoolProperty(
         name="Concavity",
         default=True)
@@ -110,7 +132,7 @@ class CurvatureOperator(bpy.types.Operator):
             a = 1.0 - math.acos(a)/math.pi
             
             # Format results
-            if self.separate:
+            if self.typesel == "GREY":
                 if a>0.5:
                     a = (a-0.5)*2.0
                     a*=self.intensity_multiplier
@@ -121,17 +143,28 @@ class CurvatureOperator(bpy.types.Operator):
                     a*=self.intensity_multiplier
                     a*=self.convexity
                     a = [a,a,a]             
-            else:
+            elif self.typesel == "GREYC":
                 a-=0.5
                 a*=self.intensity_multiplier
                 if a<0:
-                    a*=self.concavity
-                else:
                     a*=self.convexity
+                else:
+                    a*=self.concavity
                 a+=0.5
                 a = 1.0-a
                 a = [a,a,a] 
-                
+            elif self.typesel == "RED":
+                if a>0.5:
+                    a = (a-0.5)*2.0
+                    a*=self.intensity_multiplier
+                    a*=self.concavity
+                    a = [a,0.0,0.0]
+                else:
+                    a = 1.0-a*2.0
+                    a*=self.intensity_multiplier
+                    a*=self.convexity
+                    a = [0.0,a,0.0]       
+                                
             if self.invert:
                 for i in range(3):
                     a[i] = 1.0 - a[i]
@@ -149,15 +182,16 @@ def add_object_button(self, context):
 
 def register():
     bpy.utils.register_class(CurvatureOperator)
-    bpy.types.VIEW3D_MT_object.append(add_object_button) 
+    #bpy.types.VIEW3D_MT_object.append(add_object_button) 
 
 def unregister():
     bpy.utils.unregister_class(CurvatureOperator)
-    bpy.types.VIEW3D_MT_object.remove(add_object_button)
+    #bpy.types.VIEW3D_MT_object.remove(add_object_button)
 
 
 if __name__ == "__main__":
+    #unregister()
     register()
-
+    #pass
     # test call
-    bpy.ops.object.vertex_colors_curve()
+    # bpy.ops.object.vertex_colors_curve()
