@@ -57,6 +57,26 @@ class CurvatureOperator(bpy.types.Operator):
             ],
         name="Output style",
         default="GREYC")
+        
+    concavity = bpy.props.BoolProperty(
+        name="Concavity",
+        default=True,
+        options={'HIDDEN'})
+    convexity = bpy.props.BoolProperty(
+        name="Convexity",
+        default=True,
+        options={'HIDDEN'})
+    
+    def curveUpdate(self, context):
+        if self.curvesel == "CAVITY":
+            self.concavity = True
+            self.convexity = False
+        if self.curvesel == "VEXITY":
+            self.concavity = False
+            self.convexity = True
+        if self.curvesel == "BOTH":
+            self.concavity = True
+            self.convexity = True
     
     curvesel = bpy.props.EnumProperty(
         items=[
@@ -65,19 +85,12 @@ class CurvatureOperator(bpy.types.Operator):
             ("BOTH", "Both", "", 3),
             ],
         name="Curvature type",
-        default="BOTH")
+        default="BOTH",
+        update=curveUpdate)
     
     intensity_multiplier = bpy.props.FloatProperty(
         name="Intensity Multiplier",
         default=6.0)
-        
-    concavity = bpy.props.BoolProperty(
-        name="Concavity",
-        default=True)
-        
-    convexity = bpy.props.BoolProperty(
-        name="Convexity",
-        default=True)
         
     invert = bpy.props.BoolProperty(
         name="Invert",
@@ -154,18 +167,28 @@ class CurvatureOperator(bpy.types.Operator):
                 a = 1.0-a
                 a = [a,a,a] 
             elif self.typesel == "RED":
+                r = 0.0
+                g = 0.0
                 if a>0.5:
-                    a = (a-0.5)*2.0
-                    a*=self.intensity_multiplier
-                    a*=self.concavity
-                    a = [a,0.0,0.0]
+                    r = (a-0.5)*2.0
+                    r*=self.intensity_multiplier
                 else:
-                    a = 1.0-a*2.0
-                    a*=self.intensity_multiplier
-                    a*=self.convexity
-                    a = [0.0,a,0.0]       
+                    g = 1.0-a*2.0
+                    g*=self.intensity_multiplier
+
+                if r>1.0: r=1.0
+                if r<0.0: r=0.0
+                
+                if g>1.0: g=1.0
+                if g<0.0: g=0.0      
+                
+                if self.invert:
+                    r = 1.0 - r
+                    g = 1.0 - g          
+
+                a = [r*self.concavity,g*self.convexity,0.0]     
                                 
-            if self.invert:
+            if self.invert and self.typesel != "RED":
                 for i in range(3):
                     a[i] = 1.0 - a[i]
                 
