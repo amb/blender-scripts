@@ -24,7 +24,7 @@ bl_info = {
     "description": "Set object vertex colors according to mesh curvature",
     "author": "Tommi Hyppänen (ambi)",
     "location": "3D View > Object menu > Curvature to vertex colors",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "blender": (2, 74, 0)
 }
 
@@ -56,7 +56,7 @@ class CurvatureOperator(bpy.types.Operator):
             ("GREYC", "Grayscale combined", "", 3),
             ],
         name="Output style",
-        default="GREYC")
+        default="RED")
         
     concavity = bpy.props.BoolProperty(
         name="Concavity",
@@ -90,10 +90,14 @@ class CurvatureOperator(bpy.types.Operator):
     
     intensity_multiplier = bpy.props.FloatProperty(
         name="Intensity Multiplier",
-        default=6.0)
+        default=12.0)
         
     invert = bpy.props.BoolProperty(
         name="Invert",
+        default=False)
+
+    normalized = bpy.props.BoolProperty(
+        name="Normalized",
         default=False)
 
     @classmethod
@@ -136,8 +140,16 @@ class CurvatureOperator(bpy.types.Operator):
                 
             # Get dot products
             dotps = []
+            multiplier = 100
             for v in other_vert:
-                dotps.append((v.co-vert.co).normalized().dot(vert.normal.normalized()))
+                thisdot = (v.co-vert.co).normalized().dot(vert.normal.normalized())
+                edgelength = (v.co-vert.co).length * multiplier
+                if edgelength < 1:
+                    edgelength = 1
+                if self.normalized:
+                    dotps.append(thisdot/edgelength)
+                else:
+                    dotps.append(thisdot)
                 
             # Sum results
             a = sum(dotps)
