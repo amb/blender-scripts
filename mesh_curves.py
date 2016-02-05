@@ -24,17 +24,9 @@ bl_info = {
     "description": "Set object vertex colors according to mesh curvature",
     "author": "Tommi Hyppänen (ambi)",
     "location": "3D View > Object menu > Curvature to vertex colors",
-    "version": (0, 1, 2),
+    "version": (0, 1, 3),
     "blender": (2, 74, 0)
 }
-
-"""
-UI: 
-    Selection: Both, Convexity, Concavity
-    Color coding: grayscale, grayscale combined, red/green
-    Intensity Multiplier <X>
-    Invert [x]
-"""
 
 import bpy
 import random
@@ -152,15 +144,10 @@ class CurvatureOperator(bpy.types.Operator):
                 retvalues[:,1] = b_part * self.intensity_multiplier            
             retvalues[:,2] = np.zeros((len(fvals)))
 
-    
         # write vertex colors
-        mloops = mesh.loops
-        colors = np.zeros((len(color_layer.data),3))
-        for poly in mesh.polygons:
-            for idx in poly.loop_indices:
-                colors[idx] = retvalues[mloops[idx].vertex_index]
-        colors = colors.flatten()
-        color_layer.data.foreach_set("color", colors)
+        mloops = np.zeros((len(mesh.loops)), dtype=np.int)
+        mesh.loops.foreach_get("vertex_index", mloops)
+        color_layer.data.foreach_set("color", retvalues[mloops].flatten())
         
         return None
     
@@ -199,21 +186,6 @@ class CurvatureOperator(bpy.types.Operator):
         # Main calculation
         vertcount = len(mesh.vertices)
         angvalues = np.zeros(vertcount, dtype=np.float)
-
-        """
-        for i in range(vertcount):  
-            v = np.array(connected_verts[i])
-            tvec = fastverts[v]-fastverts[i]
-            tvlen = np.reshape(np.linalg.norm(tvec, axis=1), (len(v), 1))
-            #print(tvec)
-            #tvlen = np.sqrt(np.dot(tvec,tvec.conj()))
-            thisdot = (tvec/tvlen).dot(fastnorms[i])
-            edgelength = tvlen * multiplier
-            edgelength = np.where(edgelength<1, 1, edgelength)
-            a = np.sum(thisdot/edgelength)/len(v)
-            a = 1.0 - np.arccos(a)/np.pi            
-            angvalues[i] = a
-        """
 
         multiplier = 100
         minedge = 1
@@ -267,7 +239,4 @@ def profile_debug():
 if __name__ == "__main__":
     #unregister()
     register()
-    #pass
-    # test call
-    # bpy.ops.object.vertex_colors_curve()
     #profile_debug()
