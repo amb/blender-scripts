@@ -6,7 +6,7 @@ bl_info = {
     "category": "Paint",
     "description": "Autoloading of brush textures from a folder",
     "author": "Tommi Hyppänen",
-    "location": "3D view> Tool Shelf > Tools > Texture Autoload",
+    "location": "3D view > Tool Shelf > Tools > Texture Autoload",
     "documentation": "community",
     "version": (0, 0, 1),
     "blender": (2, 76, 0)
@@ -61,17 +61,15 @@ class AlphasRemoveAllOperator(bpy.types.Operator):
 class TextureAutoloadPanel(bpy.types.Panel):
     """Creates a Panel for Texture Autoload addon"""
     bl_label = "Texture Autoload"
-    bl_idname = "OBJECT_PT_hello"
+    #bl_idname = "texautoload_panel_imagepaint"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'TOOLS'
     bl_category = "Tools"
-    bl_context = "imagepaint"
+    #bl_context = "imagepaint"
 
     def draw(self, context):
         layout = self.layout
-
         obj = context.object
-
         row = layout.row()
         row.prop(context.scene, "alphas_location", text="Alphas Location")
         row = layout.row()
@@ -79,12 +77,18 @@ class TextureAutoloadPanel(bpy.types.Panel):
         row = layout.row()
         row.operator(AlphasRemoveAllOperator.bl_idname)
 
-class_names = [AlphasLoadOperator, AlphasRemoveAllOperator, TextureAutoloadPanel]
+contexts = ["imagepaint", "sculpt_mode", "vertexpaint"]
 
 def register():    
     bpy.utils.register_class(AlphasLoadOperator)
     bpy.utils.register_class(AlphasRemoveAllOperator)
-    bpy.utils.register_class(TextureAutoloadPanel)
+    
+    for c in contexts:
+        propdic = {"bl_idname": "texautoloadpanel.%s" % c,
+                   "bl_context": c,}
+        MyPanel = type("TextureAutoloadPanel_%s" % c, (TextureAutoloadPanel,), propdic)
+        bpy.utils.register_class(MyPanel)
+    
     bpy.types.Scene.alphas_location = bpy.props.StringProperty(
         name="alphas_path",
         description="Alphas Location",
@@ -93,7 +97,13 @@ def register():
 def unregister():
     bpy.utils.unregister_class(AlphasLoadOperator)
     bpy.utils.unregister_class(AlphasRemoveAllOperator)
-    bpy.utils.unregister_class(TextureAutoloadPanel)
+
+    for c in contexts:
+        propdic = {"bl_idname": "texautoloadpanel.%s" % c,
+                   "bl_context": c,}
+        MyPanel = type("TextureAutoloadPanel_%s" % c, (TextureAutoloadPanel,), propdic)
+        bpy.utils.unregister_class(MyPanel)
+        
     del bpy.types.Scene.alphas_location
 
 
