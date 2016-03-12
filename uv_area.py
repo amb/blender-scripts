@@ -17,8 +17,10 @@ def triangle_area(verts):
     # A² = (2ab + 2bc + 2ca – a² – b² – c²)/16
     a = (verts[1][0]-verts[0][0])**2.0 + (verts[1][1]-verts[0][1])**2.0 
     b = (verts[2][0]-verts[1][0])**2.0 + (verts[2][1]-verts[1][1])**2.0 
-    c = (verts[0][0]-verts[2][0])**2.0 + (verts[0][1]-verts[2][1])**2.0 
-    return math.sqrt((2*a*b + 2*b*c + 2*c*a - a**2 - b**2 - c**2)/16)
+    c = (verts[0][0]-verts[2][0])**2.0 + (verts[0][1]-verts[2][1])**2.0
+    cal = (2*a*b + 2*b*c + 2*c*a - a**2 - b**2 - c**2)/16
+    if cal<0: cal=0 
+    return math.sqrt(cal)
 
 def quad_area(verts):
     return triangle_area(verts[:3]) + triangle_area(verts[2:]+[verts[0]])

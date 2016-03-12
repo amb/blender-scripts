@@ -1,66 +1,73 @@
+# Calculate used UV area, works only for tri+quad meshes
+# doesn't account for UV overlap
+
+# Copyright 2016 Tommi Hyppänen
+# License: GPL 2
+
 import bpy
-import bmesh
 import math
 
-if bpy.app.version[0] < 2 or bpy.app.version[1] < 62:
-    raise Exception("This Triplanar UV mapping addons works only in Blender 2.62 and above")
+ob = bpy.context.object
+uv_layer = ob.data.uv_layers.active.data
 
-def main(context):
-    obj = context.active_object
-    me = obj.data
-    bm = bmesh.from_edit_mesh(me)
+def triangle_area(verts):
+    # Heron's formula
+    # uses optimization by Iñigo Quilez
+    # http://www.iquilezles.org/blog/?p=1579
+    # A² = (2ab + 2bc + 2ca – a² – b² – c²)/16
+    a = (verts[1][0]-verts[0][0])**2.0 + (verts[1][1]-verts[0][1])**2.0 
+    b = (verts[2][0]-verts[1][0])**2.0 + (verts[2][1]-verts[1][1])**2.0 
+    c = (verts[0][0]-verts[2][0])**2.0 + (verts[0][1]-verts[2][1])**2.0
+    cal = (2*a*b + 2*b*c + 2*c*a - a**2 - b**2 - c**2)/16
+    if cal<0: cal=0 
+    return math.sqrt(cal)
 
-    uv_layer = bm.loops.layers.uv.verify()
-    bm.faces.layers.tex.verify()  # currently blender needs both layers.
+def quad_area(verts):
+    return triangle_area(verts[:3]) + triangle_area(verts[2:]+[verts[0]])
 
-    # adjust UVs
-    for f in bm.faces:
-        norm = f.normal
-        ax, ay, az = abs(norm.x), abs(norm.y), abs(norm.z)
-        print(ax,ay,az)
-        axis = -1
-        if ax > ay and ax > az:
-            axis = 0
-        if ay > ax and ay > az:
-            axis = 1
-        if az > ax and az > ay:
-            axis = 2
-        for l in f.loops:
-            luv = l[uv_layer]
-            if axis == 0: # x plane
-                luv.uv.x = l.vert.co.y
-                luv.uv.y = l.vert.co.z
-            if axis == 1: # u plane
-                luv.uv.x = l.vert.co.x
-                luv.uv.y = l.vert.co.z
-            if axis == 2: # z plane
-                luv.uv.x = l.vert.co.x
-                luv.uv.y = l.vert.co.y
+def get_uv_area():
+    total_area = 0.0
+    for poly in ob.data.polygons:
+        if len(poly.loop_indices) == 3:
+            total_area += triangle_area([uv_layer[i].uv for i in poly.loop_indices])
+        if len(poly.loop_indices) == 4:
+            total_area += quad_area([uv_layer[i].uv for i in poly.loop_indices])
 
-    bmesh.update_edit_mesh(me)
+    return total_area
 
+def approximate_islands():
+    islands = []
 
-class UvOperator(bpy.types.Operator):
-    """Triplanar UV mapping"""
-    bl_idname = "uv.triplanar"
-    bl_label = "Triplanar UV mapping"
+    # merge polygons sharing uvs
+    for poly in ob.data.polygons:
+        uvs = set((round(uv_layer[i].uv[0], 2), round(uv_layer[i].uv[1], 2)) for i in poly.loop_indices)
+        notfound = True
+        for i,island in enumerate(islands):
+            if island & uvs != set():
+                islands[i] = islands[i].union(uvs)
+                notfound = False
+                break
+        if notfound:
+            islands.append(uvs)
+        
+    # merge sets sharing uvs
+    for isleidx in range(len(islands)):    
+        el = islands[isleidx]
+        notfound = True
+        for i, isle in enumerate(islands):
+            if i == isleidx:
+                continue
+            if el & isle != set():
+                islands[i] = islands[i].union(el)
+                islands[isleidx] = set()
+                notfound = False
+                break
+            
+    # remove empty sets
+    islands = [i for i in islands if i != set()]
+    return islands
+        
 
-    @classmethod
-    def poll(cls, context):
-        return (context.mode == 'EDIT_MESH')
-
-    def execute(self, context):
-        main(context)
-        return {'FINISHED'}
-
-
-def register():
-    bpy.utils.register_class(UvOperator)
-
-
-def unregister():
-    bpy.utils.unregister_class(UvOperator)
-
-
-if __name__ == "__main__":
-    register()
+print(repr(len(approximate_islands())) + " approximate UV islands counted.")
+print(repr(round((1.0-get_uv_area())*100, 2) )+"% UV area wasted.")
+            
