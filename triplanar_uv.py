@@ -23,17 +23,20 @@ bl_info = {
     "category": "UV",
     "description": "Generate triplanar UV mapping from an object",
     "author": "Tommi Hyppänen (ambi)",
-    "location": "Space bar quick menu > Triplanar UV mapping",
-    "version": (0, 0, 1),
+    "location": "View3D > Edit mode > Unwrap menu > Triplanar UV mapping",
+    "version": (0, 0, 2),
     "blender": (2, 76, 0)
 }
+
 
 import bpy
 import bmesh
 import math
 
+
 if bpy.app.version[0] < 2 or bpy.app.version[1] < 62:
     raise Exception("This Triplanar UV mapping addons works only in Blender 2.62 and above")
+    
 
 def main(context):
     obj = context.active_object
@@ -81,15 +84,21 @@ class UvOperator(bpy.types.Operator):
     def execute(self, context):
         main(context)
         return {'FINISHED'}
+    
 
+def menu_func(self, context):
+    self.layout.operator("uv.triplanar")
+    
 
 def register():
     bpy.utils.register_class(UvOperator)
-
+    bpy.types.VIEW3D_MT_uv_map.append(menu_func)
+    
 
 def unregister():
     bpy.utils.unregister_class(UvOperator)
-
+    bpy.types.VIEW3D_MT_uv_map.remove(menu_func)
+    
 
 if __name__ == "__main__":
     register()
