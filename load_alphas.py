@@ -5,7 +5,7 @@ bl_info = {
     "name": "Brush Texture Autoload",
     "category": "Paint",
     "description": "Autoloading of brush textures from a folder",
-    "author": "Tommi Hyppänen",
+    "author": "Tommi Hyppänen (ambi)",
     "location": "3D view > Tool Shelf > Tools > Texture Autoload",
     "documentation": "community",
     "version": (0, 0, 1),
@@ -53,19 +53,22 @@ class AlphasRemoveAllOperator(bpy.types.Operator):
     def execute(self, context):
         remove_these = [i for i in bpy.data.textures.keys() if 'autoload' in i.split('.')]
         for item in remove_these:
-            if not bpy.data.textures[item].users:
-                bpy.data.textures.remove(bpy.data.textures[item])
+            tex = bpy.data.textures[item]
+            img = tex.image
+            if not tex.users:
+                bpy.data.textures.remove(tex)
+                img.user_clear()
+                if not img.users:
+                    bpy.data.images.remove(img)
         
         return {'FINISHED'}
     
 class TextureAutoloadPanel(bpy.types.Panel):
     """Creates a Panel for Texture Autoload addon"""
     bl_label = "Texture Autoload"
-    #bl_idname = "texautoload_panel_imagepaint"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'TOOLS'
     bl_category = "Tools"
-    #bl_context = "imagepaint"
 
     def draw(self, context):
         layout = self.layout
@@ -77,15 +80,14 @@ class TextureAutoloadPanel(bpy.types.Panel):
         row = layout.row()
         row.operator(AlphasRemoveAllOperator.bl_idname)
 
-contexts = ["imagepaint", "sculpt_mode", "vertexpaint"]
-
 def register():    
+    contexts = ["imagepaint", "sculpt_mode", "vertexpaint"]
+
     bpy.utils.register_class(AlphasLoadOperator)
     bpy.utils.register_class(AlphasRemoveAllOperator)
     
     for c in contexts:
-        propdic = {"bl_idname": "texautoloadpanel.%s" % c,
-                   "bl_context": c,}
+        propdic = {"bl_idname": "texautoloadpanel.%s" % c, "bl_context": c,}
         MyPanel = type("TextureAutoloadPanel_%s" % c, (TextureAutoloadPanel,), propdic)
         bpy.utils.register_class(MyPanel)
     
@@ -95,6 +97,8 @@ def register():
         subtype='DIR_PATH')
 
 def unregister():
+    contexts = ["imagepaint", "sculpt_mode", "vertexpaint"]
+
     bpy.utils.unregister_class(AlphasLoadOperator)
     bpy.utils.unregister_class(AlphasRemoveAllOperator)
 
