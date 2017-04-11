@@ -22,74 +22,99 @@ bl_info = {
     "description": "Calculate relevant statistics on the active UV map",
     "author": "Tommi Hyppänen (ambi)",
     "location": "UV/Image Editor > Tools > Misc > UV Stats > Update Stats",
-    "version": (0, 0, 5),
+    "version": (0, 0, 6),
     "blender": (2, 76, 0)
 }
 
 # Calculate used UV area, works only for tri+quad meshes
 # doesn't account for UV overlap
-# not reliable for UV points closer to one another than 0.0002 units
 
 import bpy
 import math
 import bmesh
+from collections import defaultdict
 
-def triangle_area(verts):
-    # Heron's formula
-    # uses optimization by Iñigo Quilez
-    # http://www.iquilezles.org/blog/?p=1579
-    # A² = (2ab + 2bc + 2ca – a² – b² – c²)/16
-    a = (verts[1][0]-verts[0][0])**2.0 + (verts[1][1]-verts[0][1])**2.0 
-    b = (verts[2][0]-verts[1][0])**2.0 + (verts[2][1]-verts[1][1])**2.0 
-    c = (verts[0][0]-verts[2][0])**2.0 + (verts[0][1]-verts[2][1])**2.0
-    cal = (2*a*b + 2*b*c + 2*c*a - a**2 - b**2 - c**2)/16
-    if cal<0: cal=0 
-    return math.sqrt(cal)
-
-def quad_area(verts):
-    return triangle_area(verts[:3]) + triangle_area(verts[2:]+[verts[0]])
-
-def get_uv_area(ob, uv_layer):
-    total_area = 0.0
-    for poly in ob.data.polygons:
-        if len(poly.loop_indices) == 3:
-            total_area += triangle_area([uv_layer[i].uv for i in poly.loop_indices])
-        if len(poly.loop_indices) == 4:
-            total_area += quad_area([uv_layer[i].uv for i in poly.loop_indices])
-
-    return total_area
-
-def approximate_islands(ob, uv_layer):
-    islands = []
-
-    # merge polygons sharing uvs
-    for poly in ob.data.polygons:
-        uvs = set((round(uv_layer[i].uv[0], 4), round(uv_layer[i].uv[1], 4)) for i in poly.loop_indices)
-        notfound = True
-        for i,island in enumerate(islands):
-            if island & uvs != set():
-                islands[i] = islands[i].union(uvs)
-                notfound = False
-                break
-        if notfound:
-            islands.append(uvs)
+class UV():
+    def __init__(self, obj):
+        self.obj = obj
+        self.uv_layer = obj.data.uv_layers.active.data
+        self.uv_esp = 5
+        self.islands = [] 
         
-    # merge sets sharing uvs
-    for isleidx in range(len(islands)):    
-        el = islands[isleidx]
-        notfound = True
-        for i, isle in enumerate(islands):
-            if i == isleidx:
-                continue
-            if el & isle != set():
-                islands[i] = islands[i].union(el)
-                islands[isleidx] = set()
-                notfound = False
-                break
+        print("Finding islands...")
+        
+        # all polys
+        selfpolys = self.obj.data.polygons
+        
+        print("..polys")
+        uvlr = self.uv_layer
+        print(len(selfpolys))
+        
+        _loc2poly = defaultdict(set)
+        _poly2loc = defaultdict(set)
+        for i, poly in enumerate(selfpolys):
+            uvs = set((round(uvlr[i].uv[0], self.uv_esp),
+                       round(uvlr[i].uv[1], self.uv_esp)) for i in poly.loop_indices)
+            for u in uvs:
+                _loc2poly[u].add(poly.index)
+                _poly2loc[poly.index].add(u)    
+
+        def _parse(poly):
+            out = set()
+            if poly in _poly2loc: 
+                out.add(poly)
+                connected = _poly2loc[poly]
+                del _poly2loc[poly]
+                
+                # while connections found
+                while connected:
+                    new_connections = set()
+                    for c in connected:
+                        for p in _loc2poly[c]:
+                            out.add(p)
+                            new_connections |= _poly2loc[p]
+                            del _poly2loc[p]
+                    connected = new_connections
+
+            return out
+        
+        # while unprocessed vertices remain... 
+        isles = []       
+        while _poly2loc:
+            # get random poly from existing points
+            _poly = next(iter(_poly2loc.items()))[0]
             
-    # remove empty sets
-    islands = [i for i in islands if i != set()]
-    return islands
+            # repeat until no more connected vertices (remove connected vertices)                              
+            isles.append(_parse(_poly))
+
+        print("..done")
+        #self.islefaces = []
+        #for i in isles:
+        #    self.islefaces.append(list(i))     
+        self.islandcount = len(isles)   
+
+        
+    def get_uv_area(self):
+        def triangle_area(verts):
+            # Heron's formula
+            a = (verts[1][0]-verts[0][0])**2.0 + (verts[1][1]-verts[0][1])**2.0 
+            b = (verts[2][0]-verts[1][0])**2.0 + (verts[2][1]-verts[1][1])**2.0 
+            c = (verts[0][0]-verts[2][0])**2.0 + (verts[0][1]-verts[2][1])**2.0
+            cal = (2*a*b + 2*b*c + 2*c*a - a**2 - b**2 - c**2)/16
+            if cal<0: cal=0 
+            return math.sqrt(cal)
+
+        def quad_area(verts):
+            return triangle_area(verts[:3]) + triangle_area(verts[2:]+[verts[0]])
+        
+        total_area = 0.0
+        for poly in self.obj.data.polygons:
+            if len(poly.loop_indices) == 3:
+                total_area += triangle_area([self.uv_layer[i].uv for i in poly.loop_indices])
+            if len(poly.loop_indices) == 4:
+                total_area += quad_area([self.uv_layer[i].uv for i in poly.loop_indices])
+
+        return total_area
         
 class UVStatsOperator(bpy.types.Operator):
     """UV Statistics"""
@@ -98,7 +123,7 @@ class UVStatsOperator(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return bpy.context.active_object.mode == "EDIT" and len(context.object.data.uv_textures) > 0
+        return bpy.context.active_object and bpy.context.active_object.mode == "EDIT" and len(context.object.data.uv_textures) > 0
         #return (context.object is not None and
         #        context.object.type == 'MESH' and
         #        len(context.object.data.uv_textures) > 0)
@@ -120,12 +145,13 @@ class UVStatsOperator(bpy.types.Operator):
         #    for l in f.loops:
         #        luv = l[uv_layer]
         #        print(luv.uv)
+        uv = UV(ob)
         
-        context.scene.uv_island_count = repr(len(approximate_islands(ob, uv_layer)))
-        context.scene.uv_area_size = repr(round((get_uv_area(ob, uv_layer))*100, 2))+"%"
+        context.scene.uv_island_count = repr(uv.islandcount)
+        context.scene.uv_area_size = repr(round(uv.get_uv_area()*100, 2))+"%"
 
         print(context.scene.uv_island_count + " approximate UV islands counted.")
-        print(context.scene.uv_area_size + " UV area used." )
+        print(context.scene.uv_area_size + " UV area used.")
         
         bpy.ops.object.mode_set(mode=prev_mode)
         return {'FINISHED'}
