@@ -22,7 +22,7 @@ bl_info = {
     "description": "Calculate relevant statistics on the active UV map",
     "author": "Tommi Hyppänen (ambi)",
     "location": "UV/Image Editor > Tools > Misc > UV Stats > Update Stats",
-    "version": (0, 0, 6),
+    "version": (0, 0, 7),
     "blender": (2, 76, 0)
 }
 
@@ -110,9 +110,13 @@ class UV():
         total_area = 0.0
         for poly in self.obj.data.polygons:
             if len(poly.loop_indices) == 3:
-                total_area += triangle_area([self.uv_layer[i].uv for i in poly.loop_indices])
+                val = triangle_area([self.uv_layer[i].uv for i in poly.loop_indices])
+                if not math.isnan(val):
+                    total_area += val
             if len(poly.loop_indices) == 4:
-                total_area += quad_area([self.uv_layer[i].uv for i in poly.loop_indices])
+                val = quad_area([self.uv_layer[i].uv for i in poly.loop_indices])
+                if not math.isnan(val):
+                    total_area += val
 
         return total_area
         
