@@ -24,8 +24,8 @@ bl_info = {
     "description": "Set object vertex colors according to mesh curvature",
     "author": "Tommi Hyppänen (ambi)",
     "location": "3D View > Object menu > Curvature to vertex colors",
-    "version": (0, 1, 5),
-    "blender": (2, 74, 0)
+    "version": (0, 1, 6),
+    "blender": (2, 79, 0)
 }
 
 import bpy
@@ -114,7 +114,7 @@ class CurvatureOperator(bpy.types.Operator):
             if self.invert:
                 fvals = 1.0 - fvals
             
-            retvalues = np.zeros((len(fvals), 3))
+            retvalues = np.zeros((len(fvals), 4))
             retvalues[:,0] = fvals
             retvalues[:,1] = fvals
             retvalues[:,2] = fvals
@@ -127,7 +127,7 @@ class CurvatureOperator(bpy.types.Operator):
             if not self.invert:
                 fvals = 1.0 - fvals
             fvals = (fvals-0.5)*self.intensity_multiplier+0.5
-            retvalues = np.zeros((len(fvals), 3))
+            retvalues = np.zeros((len(fvals), 4))
             retvalues[:,0] = fvals
             retvalues[:,1] = fvals
             retvalues[:,2] = fvals
@@ -136,7 +136,7 @@ class CurvatureOperator(bpy.types.Operator):
             splitter = fvals>0.5
             a_part = splitter * (fvals*2-1)*self.concavity
             b_part = np.logical_not(splitter) * (1-fvals*2)*self.convexity
-            retvalues = np.zeros((len(fvals), 3))
+            retvalues = np.zeros((len(fvals), 4))
             if self.invert:
                 retvalues[:,0] = 1.0 - a_part * self.intensity_multiplier
                 retvalues[:,1] = 1.0 - b_part * self.intensity_multiplier
@@ -166,53 +166,6 @@ class CurvatureOperator(bpy.types.Operator):
         mverts_no = np.zeros((len(mesh.vertices)*3), dtype=np.float)
         mesh.vertices.foreach_get("normal", mverts_no)
         return np.reshape(mverts_no, (len(mesh.vertices), 3))
-                
-    def opencl_calc(self, mesh, fastedges, fastverts, fastnorms):
-        # FIXME: Doesn't work
-        raise NotImplementedError
-        vecsums = np.zeros(fastverts.shape[0], dtype=np.float32) 
-        connections = np.zeros(fastverts.shape[0], dtype=np.float32)
-        
-        # create an OpenCL context
-        ctx = cl.create_some_context()
-        queue = cl.CommandQueue(ctx)
-
-        # kernel output placeholder
-        outputvals = np.empty(len(mesh.vertices), dtype=np.float32)
-        b_dev = cl.Buffer(ctx, cl.mem_flags.WRITE_ONLY, outputvals.nbytes)
-
-        fastverts = fastverts.flatten().astype(np.float32)
-        fve_dev = cl.Buffer(ctx, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=fastverts)
-        
-        fastnorms = fastnorms.flatten().astype(np.float32)
-        fno_dev = cl.Buffer(ctx, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=fastnorms)
-        
-        fastedges = fastedges.flatten().astype(np.int32)
-        fed_dev = cl.Buffer(ctx, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=fastedges)
-
-        # OpenCL kernel code
-        code = """
-        #define EDGELEN %(edgelen)d
-        __kernel void test1(__global float* b, __global float* fve, __global float* fno, __global int* fed) {
-            int i = get_global_id(0);
-            //b[i] = (float)i/(float)get_global_size(0);
-            //b[i] = fno[i*3+1]/10.0+0.5;
-            //int edge_b = fed[i*2+1];
-            
-            //b[fed[i*2]] += fve[fed[i*2]*3];
-            int localPos = fed[i*2];
-            b[localPos] = 0.0;
-            //b[i] = 1.0;
-        }
-        """% {"edgelen": len(mesh.edges)}
-        
-        prg = cl.Program(ctx, code).build()
-        print(repr((int(fastedges.shape[0]/2), 1)))
-        event = prg.test1(queue, (int(fastedges.shape[0]/2),), None, b_dev, fve_dev, fno_dev, fed_dev)
-        event.wait()
-
-        cl.enqueue_copy(queue, outputvals, b_dev)
-        return outputvals
         
     def calc_normals(self, mesh, fastverts, fastnorms, fastedges):
         multiplier = 100
