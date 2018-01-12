@@ -114,7 +114,7 @@ class CurvatureOperator(bpy.types.Operator):
             if self.invert:
                 fvals = 1.0 - fvals
             
-            retvalues = np.zeros((len(fvals), 4))
+            retvalues = np.ones((len(fvals), 4))
             retvalues[:,0] = fvals
             retvalues[:,1] = fvals
             retvalues[:,2] = fvals
@@ -127,7 +127,7 @@ class CurvatureOperator(bpy.types.Operator):
             if not self.invert:
                 fvals = 1.0 - fvals
             fvals = (fvals-0.5)*self.intensity_multiplier+0.5
-            retvalues = np.zeros((len(fvals), 4))
+            retvalues = np.ones((len(fvals), 4))
             retvalues[:,0] = fvals
             retvalues[:,1] = fvals
             retvalues[:,2] = fvals
@@ -136,7 +136,7 @@ class CurvatureOperator(bpy.types.Operator):
             splitter = fvals>0.5
             a_part = splitter * (fvals*2-1)*self.concavity
             b_part = np.logical_not(splitter) * (1-fvals*2)*self.convexity
-            retvalues = np.zeros((len(fvals), 4))
+            retvalues = np.ones((len(fvals), 4))
             if self.invert:
                 retvalues[:,0] = 1.0 - a_part * self.intensity_multiplier
                 retvalues[:,1] = 1.0 - b_part * self.intensity_multiplier
