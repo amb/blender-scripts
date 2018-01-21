@@ -55,6 +55,14 @@ def read_norms(mesh):
     return np.reshape(mverts_no, (len(mesh.vertices), 3))
 
 
+def safe_bincount(data, weights, dts, conn):
+    bc = np.bincount(data, weights)
+    dts[:len(bc)] += bc
+    bc = np.bincount(data)
+    conn[:len(bc)] += bc
+    return (dts, conn)
+
+
 class CurvatureOperator(bpy.types.Operator):
     """Curvature to vertex colors"""
     bl_idname = "object.vertex_colors_curve"
@@ -191,16 +199,16 @@ class CurvatureOperator(bpy.types.Operator):
         tvec = (tvec.T / tvlen).T # normalize vectors
 
         vecsums = np.zeros(fastverts.shape[0], dtype=np.float) 
+        connections = np.zeros(fastverts.shape[0], dtype=np.float) 
 
         # calculate normal differences to the edge vector in the first edge vertex
         totdot = (np.einsum('ij,ij->i', tvec, fastnorms[edge_a]))/edgelength
-        vecsums = np.bincount(edge_a, totdot)
-        connections = np.bincount(edge_a)
+        # for i, v in enumerate(edge_a) vecsums[i] += totdot[v]:
+        safe_bincount(edge_a, totdot, vecsums, connections)
 
         # calculate normal differences to the edge vector  in the second edge vertex
         totdot = (np.einsum('ij,ij->i', -tvec, fastnorms[edge_b]))/edgelength
-        vecsums += np.bincount(edge_b, totdot)
-        connections += np.bincount(edge_b)
+        safe_bincount(edge_b, totdot, vecsums, connections)
 
         # (approximate gaussian) curvature is the average difference of 
         # edge vectors to surface normals (from dot procuct cosine equation)
@@ -218,28 +226,27 @@ class CurvatureOperator(bpy.types.Operator):
         tvlen = np.linalg.norm(fastverts[edge_b] - fastverts[edge_a], axis=1)
         edgelength = np.where(tvlen<1, 1.0, tvlen)
 
+        data_sums = np.zeros(fastverts.shape[0], dtype=np.float) 
+        connections = np.zeros(fastverts.shape[0], dtype=np.float) 
+
         # longer the edge distance to datapoint, less it has influence
         # step 1
         per_vert = data[edge_b]/edgelength
-        data_sums = np.bincount(edge_a, per_vert)
-        connections = np.bincount(edge_a)
+        safe_bincount(edge_a, per_vert, data_sums, connections)
         eb_smooth = data_sums/connections
         
         per_vert = eb_smooth[edge_a]/edgelength
-        data_sums += np.bincount(edge_b, per_vert)
-        connections += np.bincount(edge_b)
+        safe_bincount(edge_b, per_vert, data_sums, connections)
 
         new_data = data_sums/connections
 
         # step 2
         per_vert = data[edge_a]/edgelength
-        data_sums = np.bincount(edge_b, per_vert)
-        connections = np.bincount(edge_b)
+        safe_bincount(edge_b, per_vert, data_sums, connections)
         ea_smooth = data_sums/connections
         
         per_vert = ea_smooth[edge_b]/edgelength
-        data_sums += np.bincount(edge_a, per_vert)
-        connections += np.bincount(edge_a)
+        safe_bincount(edge_a, per_vert, data_sums, connections)
 
         new_data += data_sums/connections
         new_data /= 2.0
