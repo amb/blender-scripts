@@ -102,10 +102,13 @@ class CurvatureOperator(bpy.types.Operator):
     
     intensity_multiplier = bpy.props.FloatProperty(
         name="Intensity Multiplier",
+        min=0.0,
         default=1.0)
         
     smooth = bpy.props.IntProperty(
         name="Smoothing steps",
+        min=0,
+        max=200,
         default=2)
 
     invert = bpy.props.BoolProperty(
@@ -212,23 +215,34 @@ class CurvatureOperator(bpy.types.Operator):
     def mesh_smooth_filter_variable(self, mesh, data, fastverts, fastedges):
         # vert indices of edges
         edge_a, edge_b = fastedges[:,0], fastedges[:,1]
-
-        tvec = fastverts[edge_b] - fastverts[edge_a]
-        tvlen = np.linalg.norm(tvec, axis=1)
-
+        tvlen = np.linalg.norm(fastverts[edge_b] - fastverts[edge_a], axis=1)
         edgelength = np.where(tvlen<1, 1.0, tvlen)
 
-        # calculate normal differences to the edge vector in the first edge vertex
-        totdot = data[edge_b]/edgelength
-        vecsums = np.bincount(edge_a, totdot)
+        # longer the edge distance to datapoint, less it has influence
+        # step 1
+        per_vert = data[edge_b]/edgelength
+        data_sums = np.bincount(edge_a, per_vert)
         connections = np.bincount(edge_a)
-
-        # calculate normal differences to the edge vector  in the second edge vertex
-        totdot = data[edge_a]/edgelength
-        vecsums += np.bincount(edge_b, totdot)
+        eb_smooth = data_sums/connections
+        
+        per_vert = eb_smooth[edge_a]/edgelength
+        data_sums += np.bincount(edge_b, per_vert)
         connections += np.bincount(edge_b)
 
-        new_data = vecsums/connections
+        new_data = data_sums/connections
+
+        # step 2
+        per_vert = data[edge_a]/edgelength
+        data_sums = np.bincount(edge_b, per_vert)
+        connections = np.bincount(edge_b)
+        ea_smooth = data_sums/connections
+        
+        per_vert = ea_smooth[edge_b]/edgelength
+        data_sums += np.bincount(edge_a, per_vert)
+        connections += np.bincount(edge_a)
+
+        new_data += data_sums/connections
+        new_data /= 2.0
 
         # limit between -1 and 1
         new_data /= np.max([np.amax(new_data), np.abs(np.amin(new_data))])
@@ -245,8 +259,10 @@ class CurvatureOperator(bpy.types.Operator):
         angvalues = self.calc_normals(mesh, fastverts, fastnorms, fastedges)
         if self.smooth > 0:
             angvalues -= 0.5
+            angvalues *= 2.0
             for _ in range(self.smooth):
                 angvalues = self.mesh_smooth_filter_variable(mesh, angvalues, fastverts, fastedges)
+            angvalues /= 2.0
             angvalues += 0.5
         
         self.set_colors(mesh, angvalues)           
