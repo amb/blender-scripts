@@ -102,8 +102,12 @@ class CurvatureOperator(bpy.types.Operator):
     
     intensity_multiplier = bpy.props.FloatProperty(
         name="Intensity Multiplier",
-        default=12.0)
+        default=1.0)
         
+    smooth = bpy.props.IntProperty(
+        name="Smoothing steps",
+        default=2)
+
     invert = bpy.props.BoolProperty(
         name="Invert",
         default=False)
@@ -172,31 +176,66 @@ class CurvatureOperator(bpy.types.Operator):
 
 
     def calc_normals(self, mesh, fastverts, fastnorms, fastedges):
-        multiplier = 100
-        
-        angvalues = np.zeros(fastverts.shape[0], dtype=np.float)
         edge_a, edge_b = fastedges[:,0], fastedges[:,1]
         
         tvec = fastverts[edge_b] - fastverts[edge_a]
         tvlen = np.linalg.norm(tvec, axis=1)
 
-        edgelength = tvlen * multiplier
+        # adjust the minimum of what is processed
+        edgelength = tvlen * 100 
         edgelength = np.where(edgelength<1, 1.0, edgelength)
 
         tvec = (tvec.T / tvlen).T # normalize vectors
 
         vecsums = np.zeros(fastverts.shape[0], dtype=np.float) 
 
+        # calculate normal differences to the edge vector in the first edge vertex
         totdot = (np.einsum('ij,ij->i', tvec, fastnorms[edge_a]))/edgelength
         vecsums = np.bincount(edge_a, totdot)
         connections = np.bincount(edge_a)
 
+        # calculate normal differences to the edge vector  in the second edge vertex
         totdot = (np.einsum('ij,ij->i', -tvec, fastnorms[edge_b]))/edgelength
         vecsums += np.bincount(edge_b, totdot)
         connections += np.bincount(edge_b)
 
-        return 1.0 - np.arccos(vecsums/connections)/np.pi
+        # (approximate gaussian) curvature is the average difference of 
+        # edge vectors to surface normals (from dot procuct cosine equation)
+        curve = 1.0 - np.arccos(vecsums/connections)/np.pi
+
+        # 1 = max curvature, 0 = min curvature, 0.5 = zero curvature
+        curve -= 0.5
+        curve /= np.max([np.amax(curve), np.abs(np.amin(curve))])
+        curve += 0.5
+        return curve
                 
+    def mesh_smooth_filter_variable(self, mesh, data, fastverts, fastedges):
+        # vert indices of edges
+        edge_a, edge_b = fastedges[:,0], fastedges[:,1]
+
+        tvec = fastverts[edge_b] - fastverts[edge_a]
+        tvlen = np.linalg.norm(tvec, axis=1)
+
+        edgelength = np.where(tvlen<1, 1.0, tvlen)
+
+        # calculate normal differences to the edge vector in the first edge vertex
+        totdot = data[edge_b]/edgelength
+        vecsums = np.bincount(edge_a, totdot)
+        connections = np.bincount(edge_a)
+
+        # calculate normal differences to the edge vector  in the second edge vertex
+        totdot = data[edge_a]/edgelength
+        vecsums += np.bincount(edge_b, totdot)
+        connections += np.bincount(edge_b)
+
+        new_data = vecsums/connections
+
+        # limit between -1 and 1
+        new_data /= np.max([np.amax(new_data), np.abs(np.amin(new_data))])
+
+        return new_data
+
+
     def execute(self, context):               
         mesh = context.active_object.data
         fastverts = read_verts(mesh)
@@ -204,6 +243,11 @@ class CurvatureOperator(bpy.types.Operator):
         fastnorms = read_norms(mesh) 
 
         angvalues = self.calc_normals(mesh, fastverts, fastnorms, fastedges)
+        if self.smooth > 0:
+            angvalues -= 0.5
+            for _ in range(self.smooth):
+                angvalues = self.mesh_smooth_filter_variable(mesh, angvalues, fastverts, fastedges)
+            angvalues += 0.5
         
         self.set_colors(mesh, angvalues)           
                 
