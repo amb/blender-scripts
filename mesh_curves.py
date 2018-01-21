@@ -24,7 +24,7 @@ bl_info = {
     "description": "Set object vertex colors according to mesh curvature",
     "author": "Tommi Hyppänen (ambi)",
     "location": "3D View > Object menu > Curvature to vertex colors",
-    "version": (0, 1, 6),
+    "version": (0, 1, 7),
     "blender": (2, 79, 0)
 }
 
@@ -34,8 +34,26 @@ from collections import defaultdict
 import mathutils
 import math
 import numpy as np
-#import pyopencl as cl
 import cProfile, pstats, io
+
+
+def read_verts(mesh):
+    mverts_co = np.zeros((len(mesh.vertices)*3), dtype=np.float)
+    mesh.vertices.foreach_get("co", mverts_co)
+    return np.reshape(mverts_co, (len(mesh.vertices), 3))      
+
+
+def read_edges(mesh):
+    fastedges = np.zeros((len(mesh.edges)*2), dtype=np.int) # [0.0, 0.0] * len(mesh.edges)
+    mesh.edges.foreach_get("vertices", fastedges)
+    return np.reshape(fastedges, (len(mesh.edges), 2))
+
+
+def read_norms(mesh):
+    mverts_no = np.zeros((len(mesh.vertices)*3), dtype=np.float)
+    mesh.vertices.foreach_get("normal", mverts_no)
+    return np.reshape(mverts_no, (len(mesh.vertices), 3))
+
 
 class CurvatureOperator(bpy.types.Operator):
     """Curvature to vertex colors"""
@@ -151,75 +169,40 @@ class CurvatureOperator(bpy.types.Operator):
         color_layer.data.foreach_set("color", retvalues[mloops].flatten())
         
         return None
-    
-    def read_verts(self, mesh):
-        mverts_co = np.zeros((len(mesh.vertices)*3), dtype=np.float)
-        mesh.vertices.foreach_get("co", mverts_co)
-        return np.reshape(mverts_co, (len(mesh.vertices), 3))      
-    
-    def read_edges(self, mesh):
-        fastedges = np.zeros((len(mesh.edges)*2), dtype=np.int) # [0.0, 0.0] * len(mesh.edges)
-        mesh.edges.foreach_get("vertices", fastedges)
-        return np.reshape(fastedges, (len(mesh.edges), 2))
-    
-    def read_norms(self, mesh):
-        mverts_no = np.zeros((len(mesh.vertices)*3), dtype=np.float)
-        mesh.vertices.foreach_get("normal", mverts_no)
-        return np.reshape(mverts_no, (len(mesh.vertices), 3))
-        
+
+
     def calc_normals(self, mesh, fastverts, fastnorms, fastedges):
         multiplier = 100
-        minedge = 1
-        
-        vecsums = np.zeros(fastverts.shape[0], dtype=np.float) 
-        connections = np.zeros(fastverts.shape[0], dtype=np.float)
         
         angvalues = np.zeros(fastverts.shape[0], dtype=np.float)
-        edge_a = fastedges[:,0]
-        edge_b = fastedges[:,1]
+        edge_a, edge_b = fastedges[:,0], fastedges[:,1]
         
         tvec = fastverts[edge_b] - fastverts[edge_a]
-        tvlen = np.sqrt(tvec[:,0]**2 + tvec[:,1]**2 + tvec[:,2]**2)
+        tvlen = np.linalg.norm(tvec, axis=1)
 
         edgelength = tvlen * multiplier
-        edgelength = np.where(edgelength<1, np.ones(edgelength.shape, dtype=np.float), edgelength)
+        edgelength = np.where(edgelength<1, 1.0, edgelength)
 
-        tvec[:,0] /= tvlen
-        tvec[:,1] /= tvlen
-        tvec[:,2] /= tvlen
-        tnorms = fastnorms[edge_a]
-        thisdot0 = tvec[:,0] * tnorms[:,0]
-        thisdot1 = tvec[:,1] * tnorms[:,1]
-        thisdot2 = tvec[:,2] * tnorms[:,2]
-        totdot = (thisdot0 + thisdot1 + thisdot2)/edgelength
-        x=0
-        for i in np.nditer(edge_a):
-            vecsums[i] += totdot[x]
-            connections[i] += 1.0
-            x+=1
-        
-        tvec = -tvec
-        bnorms = fastnorms[edge_b]
-        bdot0 = tvec[:,0] * bnorms[:,0]
-        bdot1 = tvec[:,1] * bnorms[:,1]
-        bdot2 = tvec[:,2] * bnorms[:,2] 
-        totdot = (bdot0 + bdot1 + bdot2)/edgelength
-        x=0
-        for i in np.nditer(edge_b):
-            vecsums[i] += totdot[x]
-            connections[i] += 1.0
-            x+=1      
+        tvec = (tvec.T / tvlen).T # normalize vectors
 
-        angvalues = 1.0 - np.arccos(vecsums/connections)/np.pi
-        return angvalues
+        vecsums = np.zeros(fastverts.shape[0], dtype=np.float) 
+
+        totdot = (np.einsum('ij,ij->i', tvec, fastnorms[edge_a]))/edgelength
+        vecsums = np.bincount(edge_a, totdot)
+        connections = np.bincount(edge_a)
+
+        totdot = (np.einsum('ij,ij->i', -tvec, fastnorms[edge_b]))/edgelength
+        vecsums += np.bincount(edge_b, totdot)
+        connections += np.bincount(edge_b)
+
+        return 1.0 - np.arccos(vecsums/connections)/np.pi
                 
     def execute(self, context):               
         mesh = context.active_object.data
-        fastverts = self.read_verts(mesh)
-        fastedges = self.read_edges(mesh)
-        fastnorms = self.read_norms(mesh) 
+        fastverts = read_verts(mesh)
+        fastedges = read_edges(mesh)
+        fastnorms = read_norms(mesh) 
 
-        #angvalues = self.opencl_calc(mesh, fastverts, fastnorms, fastedges)
         angvalues = self.calc_normals(mesh, fastverts, fastnorms, fastedges)
         
         self.set_colors(mesh, angvalues)           
