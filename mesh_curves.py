@@ -187,23 +187,31 @@ class CurvatureOperator(bpy.types.Operator):
 
 
     def calc_normals(self, mesh, fastverts, fastnorms, fastedges):
+        # FIXME: FAILS AT INVALID INPUT MESH
+        #        If there are any loose or disconnected vertices or edges, the output will be black
+        # HOWTO cleanup:
+        #        1. Remove doubles
+        #        2. Delete loose
+
         edge_a, edge_b = fastedges[:,0], fastedges[:,1]
         
         tvec = fastverts[edge_b] - fastverts[edge_a]
-        tvlen = np.linalg.norm(tvec, axis=1)
-
-        # adjust the minimum of what is processed
-        edgelength = tvlen * 100 
-        edgelength = np.where(edgelength<1, 1.0, edgelength)
+        tvlen = np.linalg.norm(tvec, axis=1)    
 
         tvec = (tvec.T / tvlen).T # normalize vectors
+
+        # adjust the minimum of what is processed   
+        edgelength = tvlen * 100 
+        edgelength = np.where(edgelength<1, 1.0, edgelength)
 
         vecsums = np.zeros(fastverts.shape[0], dtype=np.float) 
         connections = np.zeros(fastverts.shape[0], dtype=np.float) 
 
         # calculate normal differences to the edge vector in the first edge vertex
         totdot = (np.einsum('ij,ij->i', tvec, fastnorms[edge_a]))/edgelength
-        # for i, v in enumerate(edge_a) vecsums[i] += totdot[v]
+        #for i, v in enumerate(edge_a):
+        #    vecsums[v] += totdot[i]
+        #    connections[v] += 1
         safe_bincount(edge_a, totdot, vecsums, connections)
 
         # calculate normal differences to the edge vector  in the second edge vertex
@@ -230,15 +238,6 @@ class CurvatureOperator(bpy.types.Operator):
         connections = np.zeros(fastverts.shape[0], dtype=np.float) 
 
         # longer the edge distance to datapoint, less it has influence
-        """
-        per_vert = data[edge_b]/edgelength
-        safe_bincount(edge_a, per_vert, data_sums, connections)
-        
-        per_vert = data[edge_a]/edgelength
-        safe_bincount(edge_b, per_vert, data_sums, connections)
-
-        new_data = data_sums/connections
-        """
 
         # step 1
         per_vert = data[edge_b]/edgelength
@@ -262,7 +261,6 @@ class CurvatureOperator(bpy.types.Operator):
         safe_bincount(edge_a, per_vert, data_sums, connections)
 
         new_data += data_sums/connections
-        new_data /= 2.0
 
         # limit between -1 and 1
         new_data /= np.max([np.amax(new_data), np.abs(np.amin(new_data))])
