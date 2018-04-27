@@ -194,7 +194,7 @@ def mesh_smooth_filter_variable(data, fastverts, fastedges, iterations):
     return new_data
 
 
-def vdb_remesh(verts, tris, quads, iso, adapt, only_quads, vxsize, filter_iterations, filter_width, filter_style, filter_quality, grid=None):
+def vdb_remesh(verts, tris, quads, iso, adapt, only_quads, vxsize, filter_iterations, filter_width, filter_style, grid=None):
 
     iso *= vxsize
 
@@ -261,7 +261,7 @@ def vdb_remesh(verts, tris, quads, iso, adapt, only_quads, vxsize, filter_iterat
     def _write(gr):
         print("vdb: write voxels to polygons")
         fit = filter_iterations if filter_iterations > 0 else 0
-        verts, tris, quads = gr.convertToComplex(isovalue=iso, adaptivity=adapt, smooth=fit, width=filter_width, quality=filter_quality)
+        verts, tris, quads = gr.convertToComplex(iso, adapt, fit, filter_width)
 
         return (verts, tris, quads)
 
@@ -482,11 +482,11 @@ class VDBRemeshOperator(bpy.types.Operator):
         else:
             startmesh = (None, None, None)
 
-        #vdb_remesh(verts, tris, quads, iso, adapt, only_quads, vxsize, filter_iterations, filter_style, grid=None):
+        #vdb_remesh(verts, tris, quads, iso, adapt, only_quads, vxsize, filter_iterations, filter_width, filter_style, grid=None):
         
         new_mesh, self.grid = vdb_remesh(startmesh[0], startmesh[1], startmesh[2], self.isovalue, \
             self.adaptivity, self.only_quads, voxel_size, self.filter_iterations, self.filter_width, \
-            self.filter_style, self.filter_quality, grid=self.grid)
+            self.filter_style, grid=self.grid)
 
         print("vdb_remesh: new mesh {}".format([i.shape for i in new_mesh]))
         self.vert_1 = len(new_mesh[0])
