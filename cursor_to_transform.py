@@ -76,6 +76,8 @@ def register():
         else:
             layout.column().prop(cursor, "rotation_euler", text="Rotation")
 
+        layout.prop(cursor, "rotation_mode", text="")
+        
         row = layout.row()
         row.operator(TFC_OT_TransformFromCursor.bl_idname, text="Copy to object")
 
@@ -86,7 +88,6 @@ def register():
             row.prop(context.scene, "new_objects_size_multiplier", text="Size")
 
 
-        layout.prop(cursor, "rotation_mode", text="")
 
     bpy.types.VIEW3D_PT_view3d_cursor.draw = draw
 
