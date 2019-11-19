@@ -23,7 +23,7 @@ bl_info = {
     "author": "Tommi Hyppänen (ambi)",
     "location": "UV/Image Editor > Tools > Misc > UV Stats > Update Stats",
     "version": (0, 0, 7),
-    "blender": (2, 76, 0)
+    "blender": (2, 80, 0)
 }
 
 # Calculate used UV area, works only for tri+quad meshes
@@ -166,8 +166,8 @@ class UVStatsPanel(bpy.types.Panel):
     bl_label = "UV Stats"
     bl_idname = "uv.statspanel"
     bl_space_type = 'IMAGE_EDITOR'
-    bl_region_type = 'TOOLS'
-    bl_category = "Tools"
+    bl_region_type = 'UI'
+    bl_category = "Image"
     #bl_context = "imagepaint"
 
     def draw(self, context):
@@ -202,4 +202,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-            
