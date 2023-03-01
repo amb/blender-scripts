@@ -10,4 +10,4 @@ Miscellanous Blender Python scripts
 | uv_area.py | Calculate used UV area, not counting overlapping |
 | vdb_remesh.py | OpenVDB based remeshing |
 | collectionize.py | Create a hierarchy of collections or empties based on separator in name (like props_chair_wooden etc) |
-| viwe_active_in_outliner.py | Highlight active selected object in outliner |
+| view_active_in_outliner.py | Highlight active selected object in outliner |
