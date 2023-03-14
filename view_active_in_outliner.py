@@ -8,8 +8,6 @@ bl_info = {
     "version": (1, 1),
     "location": "View3D > Object > View active object in outliner",
     "description": "View active object in outliner",
-    "warning": "Experimental",
-    "addon_support": "TESTING",
 }
 
 previous_selection = None

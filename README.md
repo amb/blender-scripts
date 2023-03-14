@@ -11,3 +11,4 @@ Miscellanous Blender Python scripts
 | vdb_remesh.py | OpenVDB based remeshing |
 | collectionize.py | Create a hierarchy of collections or empties based on separator in name (like props_chair_wooden etc) |
 | view_active_in_outliner.py | Highlight active selected object in outliner |
+| fix_negative_scale.py | Fix negative scale objects for Godot (broken normals) |

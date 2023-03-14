@@ -10,8 +10,6 @@ bl_info = {
     "location": "View3D > Object > Collectionize",
     "description": "Create collections from object names",
     "category": "Object",
-    "warning": "Experimental",
-    "addon_support": "TESTING",
 }
 
 # This is pretty much what delete does, maybe later make it do more
