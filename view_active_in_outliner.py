@@ -34,7 +34,7 @@ def view_act_object_in_outliner():
 
 def sync_toggle(self, context):
     if context.scene.sync_view3d_outliner:
-        bpy.app.timers.register(view_act_object_in_outliner, first_interval=1.0)
+        bpy.app.timers.register(view_act_object_in_outliner, first_interval=0.1)
     else:
         bpy.app.timers.unregister(view_act_object_in_outliner)
 
